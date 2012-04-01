@@ -1182,9 +1182,8 @@ class GdbLaunch(sublime_plugin.WindowCommand):
         global gdb_bkp_layout
         global gdb_shutting_down
         if gdb_process == None or gdb_process.poll() != None:
-            os.chdir(get_setting("workingdir", "/tmp"))
-            executable = get_setting("executable")
-            gdb_process = subprocess.Popen(["gdb","--interpreter=mi",executable], shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            gdb_process = subprocess.Popen(["gdb","--interpreter=mi",executable], shell=True, cwd=get_setting("workingdir", "/tmp"),
+                                            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
             gdb_bkp_window = sublime.active_window()
             #back up current layout before opening the debug one
