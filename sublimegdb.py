@@ -66,18 +66,11 @@ if os.name == 'nt':
 gdb_run_status = None
 result_regex = re.compile("(?<=\^)[^,\"]*")
 
-layout_restore = {'cells': [[0, 0, 1, 1]], 'rows': [0.0, 1.0], 'cols': [0.0, 1.0]}
-
 
 def log_debug(line):
     if DEBUG:
         os.system("echo \"%s\" >> \"%s\"" % (line, DEBUG_FILE))
 
-def debug_end():
-    for view in gdb_views:
-        sublime.set_timeout(functools.partial(view.close),0)  
-    w = sublime.active_window()
-    w.set_layout(layout_restore)
 
 class GDBView(object):
     def __init__(self, name, s=True, settingsprefix=None):
@@ -101,17 +94,6 @@ class GDBView(object):
             if self.settingsprefix != None:
                 sublime.active_window().focus_group(get_setting("%s_group" % self.settingsprefix, 0))
             self.create_view()
-
-    def close(self):
-        if self.view != None:
-            w = self.view.window()
-            if w != None:
-                v = w.active_view()
-                w.focus_view(self.view)
-                w.run_command("close_file")
-                self.was_closed()
-                if v:
-                    w.focus_view(v)
 
     def should_update(self):
         return self.is_open() and is_running() and gdb_run_status == "stopped"
@@ -847,33 +829,31 @@ def extract_breakpoints(line):
 def update_view_markers(view=None):
     if view == None:
         view = sublime.active_window().active_view()
+    bps = []
+    fn = view.file_name()
+    if fn in breakpoints:
+        for line in breakpoints[fn]:
+            if not (line == gdb_cursor_position and fn == gdb_cursor):
+                bps.append(view.full_line(view.text_point(line - 1, 0)))
+    view.add_regions("sublimegdb.breakpoints", bps,
+                        get_setting("breakpoint_scope", "keyword.gdb"),
+                        get_setting("breakpoint_icon", "circle"),
+                        sublime.HIDDEN)
 
-    if view != None:
-        bps = []
-        fn = view.file_name()
-        if fn in breakpoints:
-            for line in breakpoints[fn]:
-                if not (line == gdb_cursor_position and fn == gdb_cursor):
-                    bps.append(view.full_line(view.text_point(line - 1, 0)))
-        view.add_regions("sublimegdb.breakpoints", bps,
-                            get_setting("breakpoint_scope", "keyword.gdb"),
-                            get_setting("breakpoint_icon", "circle"),
-                            sublime.HIDDEN)
+    pos_scope = get_setting("position_scope", "entity.name.class")
+    pos_icon = get_setting("position_icon", "bookmark")
 
-        pos_scope = get_setting("position_scope", "entity.name.class")
-        pos_icon = get_setting("position_icon", "bookmark")
+    cursor = []
+    if fn == gdb_cursor and gdb_cursor_position != 0:
+        cursor.append(view.full_line(view.text_point(gdb_cursor_position - 1, 0)))
+    global gdb_last_cursor_view
+    if not gdb_last_cursor_view is None:
+        gdb_last_cursor_view.erase_regions("sublimegdb.position")
+    gdb_last_cursor_view = view
+    view.add_regions("sublimegdb.position", cursor, pos_scope, pos_icon, sublime.HIDDEN)
 
-        cursor = []
-        if fn == gdb_cursor and gdb_cursor_position != 0:
-            cursor.append(view.full_line(view.text_point(gdb_cursor_position - 1, 0)))
-        global gdb_last_cursor_view
-        if not gdb_last_cursor_view is None:
-            gdb_last_cursor_view.erase_regions("sublimegdb.position")
-        gdb_last_cursor_view = view
-        view.add_regions("sublimegdb.position", cursor, pos_scope, pos_icon, sublime.HIDDEN)
-
-        gdb_callstack_view.update_marker(pos_scope, pos_icon)
-        gdb_threads_view.update_marker(pos_scope, pos_icon)
+    gdb_callstack_view.update_marker(pos_scope, pos_icon)
+    gdb_threads_view.update_marker(pos_scope, pos_icon)
 
 count = 0
 
@@ -1104,7 +1084,6 @@ def gdboutput(pipe):
     gdb_disassembly_view.clear()
     gdb_variables_view.clear()
     gdb_threads_view.clear()
-    sublime.set_timeout(debug_end, 0)
 
 
 def programoutput():
@@ -1174,7 +1153,6 @@ class GdbLaunch(sublime_plugin.WindowCommand):
             gdb_process = subprocess.Popen(["gdb","--interpreter=mi",executable], shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
             w = sublime.active_window()
-            layout_restore = w.get_layout()
             w.set_layout(
                 get_setting("layout",
                     {
@@ -1244,7 +1222,6 @@ class GdbExit(sublime_plugin.WindowCommand):
     def run(self):
         wait_until_stopped()
         run_cmd("-gdb-exit", True)
-        debug_end()
 
     def is_enabled(self):
         return is_running()
