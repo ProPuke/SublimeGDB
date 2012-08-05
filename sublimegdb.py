@@ -1351,7 +1351,7 @@ class GdbLaunch(sublime_plugin.WindowCommand):
         global gdb_shutting_down
         if gdb_process == None or gdb_process.poll() != None:
             executable = get_setting("executable")
-            commandline = "gdb --interpreter=mi %s" % executable
+            commandline = "gdb --interpreter=mi --args %s" % executable
             path = expand_path(get_setting("workingdir", "/tmp", self.window.active_view()), self.window)
             print "Running: %s" % commandline
             print "In directory: %s" % path
